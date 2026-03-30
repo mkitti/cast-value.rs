@@ -10,6 +10,14 @@ readme = "../README.md"
 [features]
 default = []
 float16 = ["dep:half"]
+# Disable all architecture-specific SIMD paths (AVX2, AVX, NEON, WASM SIMD128)
+# and fall through to the generic pulp::WithSimd kernel on every target.
+# Useful for codegen inspection: compare assembly with and without this flag.
+no-arch-simd = []
+# When combined with no-arch-simd, routes the fallback through generic_scalar
+# (two-pass, hoisted-match approach) instead of the pulp::WithSimd kernel.
+# Compare: `--features no-arch-simd` vs `--features no-arch-simd,scalar-simd`.
+scalar-simd = ["no-arch-simd"]
 
 [dependencies]
 half = { version = "2", optional = true, features = ["num-traits"] }

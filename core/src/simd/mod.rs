@@ -16,19 +16,25 @@
 
 use crate::RoundingMode;
 
-#[cfg(target_arch = "x86_64")]
+#[cfg(all(target_arch = "x86_64", not(feature = "no-arch-simd")))]
 mod avx2;
 
-#[cfg(target_arch = "x86_64")]
+#[cfg(all(target_arch = "x86_64", not(feature = "no-arch-simd")))]
 mod avx;
 
-#[cfg(target_arch = "aarch64")]
+#[cfg(all(target_arch = "aarch64", not(feature = "no-arch-simd")))]
 mod aarch64;
 
-#[cfg(target_arch = "wasm32")]
+#[cfg(all(target_arch = "wasm32", not(feature = "no-arch-simd")))]
 mod wasm32;
 
+// Always compiled so both kernels appear in `--emit=asm` output.
+// Dead-code lint suppressed because arch-specific paths shadow these on most targets.
+#[allow(dead_code)]
 mod generic;
+
+#[allow(dead_code)]
+pub(crate) mod generic_scalar;
 
 /// Try to convert f64 slice to u8 slice using SIMD with clamping.
 ///
@@ -82,7 +88,7 @@ pub fn try_f32_to_u8_clamp(
 // Architecture dispatch — each function selects the optimal kernel.
 // ---------------------------------------------------------------------------
 
-#[cfg(target_arch = "x86_64")]
+#[cfg(all(target_arch = "x86_64", not(feature = "no-arch-simd")))]
 fn dispatch_f64_to_u8(
     src: &[f64],
     dst: &mut [u8],
@@ -101,7 +107,7 @@ fn dispatch_f64_to_u8(
     generic::f64_to_u8_clamp(src, dst, rounding)
 }
 
-#[cfg(target_arch = "aarch64")]
+#[cfg(all(target_arch = "aarch64", not(feature = "no-arch-simd")))]
 fn dispatch_f64_to_u8(
     src: &[f64],
     dst: &mut [u8],
@@ -111,7 +117,7 @@ fn dispatch_f64_to_u8(
     unsafe { aarch64::f64_to_u8_clamp(src, dst, rounding) }.map(|()| true)
 }
 
-#[cfg(target_arch = "wasm32")]
+#[cfg(all(target_arch = "wasm32", not(feature = "no-arch-simd")))]
 fn dispatch_f64_to_u8(
     src: &[f64],
     dst: &mut [u8],
@@ -128,20 +134,28 @@ fn dispatch_f64_to_u8(
     }
 }
 
-#[cfg(not(any(
-    target_arch = "x86_64",
-    target_arch = "aarch64",
-    target_arch = "wasm32"
-)))]
+#[cfg(any(
+    feature = "no-arch-simd",
+    not(any(
+        target_arch = "x86_64",
+        target_arch = "aarch64",
+        target_arch = "wasm32"
+    ))
+))]
 fn dispatch_f64_to_u8(
     src: &[f64],
     dst: &mut [u8],
     rounding: RoundingMode,
 ) -> Result<bool, crate::CastError> {
+    // `scalar-simd` routes to the two-pass hoisted-match kernel for assembly
+    // comparison against the pulp::WithSimd kernel.
+    #[cfg(feature = "scalar-simd")]
+    return generic_scalar::f64_to_u8_clamp(src, dst, rounding);
+    #[cfg(not(feature = "scalar-simd"))]
     generic::f64_to_u8_clamp(src, dst, rounding)
 }
 
-#[cfg(target_arch = "x86_64")]
+#[cfg(all(target_arch = "x86_64", not(feature = "no-arch-simd")))]
 fn dispatch_f64_to_i32(
     src: &[f64],
     dst: &mut [i32],
@@ -156,7 +170,7 @@ fn dispatch_f64_to_i32(
     generic::f64_to_i32_clamp(src, dst, rounding)
 }
 
-#[cfg(target_arch = "aarch64")]
+#[cfg(all(target_arch = "aarch64", not(feature = "no-arch-simd")))]
 fn dispatch_f64_to_i32(
     src: &[f64],
     dst: &mut [i32],
@@ -165,7 +179,7 @@ fn dispatch_f64_to_i32(
     unsafe { aarch64::f64_to_i32_clamp(src, dst, rounding) }.map(|()| true)
 }
 
-#[cfg(target_arch = "wasm32")]
+#[cfg(all(target_arch = "wasm32", not(feature = "no-arch-simd")))]
 fn dispatch_f64_to_i32(
     src: &[f64],
     dst: &mut [i32],
@@ -181,20 +195,26 @@ fn dispatch_f64_to_i32(
     }
 }
 
-#[cfg(not(any(
-    target_arch = "x86_64",
-    target_arch = "aarch64",
-    target_arch = "wasm32"
-)))]
+#[cfg(any(
+    feature = "no-arch-simd",
+    not(any(
+        target_arch = "x86_64",
+        target_arch = "aarch64",
+        target_arch = "wasm32"
+    ))
+))]
 fn dispatch_f64_to_i32(
     src: &[f64],
     dst: &mut [i32],
     rounding: RoundingMode,
 ) -> Result<bool, crate::CastError> {
+    #[cfg(feature = "scalar-simd")]
+    return generic_scalar::f64_to_i32_clamp(src, dst, rounding);
+    #[cfg(not(feature = "scalar-simd"))]
     generic::f64_to_i32_clamp(src, dst, rounding)
 }
 
-#[cfg(target_arch = "x86_64")]
+#[cfg(all(target_arch = "x86_64", not(feature = "no-arch-simd")))]
 fn dispatch_f32_to_u8(
     src: &[f32],
     dst: &mut [u8],
@@ -209,7 +229,7 @@ fn dispatch_f32_to_u8(
     generic::f32_to_u8_clamp(src, dst, rounding)
 }
 
-#[cfg(target_arch = "aarch64")]
+#[cfg(all(target_arch = "aarch64", not(feature = "no-arch-simd")))]
 fn dispatch_f32_to_u8(
     src: &[f32],
     dst: &mut [u8],
@@ -218,7 +238,7 @@ fn dispatch_f32_to_u8(
     unsafe { aarch64::f32_to_u8_clamp(src, dst, rounding) }.map(|()| true)
 }
 
-#[cfg(target_arch = "wasm32")]
+#[cfg(all(target_arch = "wasm32", not(feature = "no-arch-simd")))]
 fn dispatch_f32_to_u8(
     src: &[f32],
     dst: &mut [u8],
@@ -234,16 +254,22 @@ fn dispatch_f32_to_u8(
     }
 }
 
-#[cfg(not(any(
-    target_arch = "x86_64",
-    target_arch = "aarch64",
-    target_arch = "wasm32"
-)))]
+#[cfg(any(
+    feature = "no-arch-simd",
+    not(any(
+        target_arch = "x86_64",
+        target_arch = "aarch64",
+        target_arch = "wasm32"
+    ))
+))]
 fn dispatch_f32_to_u8(
     src: &[f32],
     dst: &mut [u8],
     rounding: RoundingMode,
 ) -> Result<bool, crate::CastError> {
+    #[cfg(feature = "scalar-simd")]
+    return generic_scalar::f32_to_u8_clamp(src, dst, rounding);
+    #[cfg(not(feature = "scalar-simd"))]
     generic::f32_to_u8_clamp(src, dst, rounding)
 }
 
